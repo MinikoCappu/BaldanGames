@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Suika Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; background-color: #f0f8ff; }
+        #nextFruit {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 60px;
+            height: 60px;
+            border: 2px solid black;
+            border-radius: 50%;
+            background-color: white;
+        }
+        #restartBtn {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div id="nextFruit"></div>
+    <button id="restartBtn">Restart Game</button>
+
+    <script>
+        class SuikaGame {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext("2d");
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+                this.score = 0;
+                this.highScore = this.loadHighScore();
+                this.gameOver = false;
+                this.mergeInProgress = false;
+                this.currentFruit = null;
+                this.nextFruitType = 0;
+                this.spawnLineY = 80;
+                this.gameOverLineY = 50;
+                this.wallThickness = 20;
+
+                this.engine = Matter.Engine.create({
+                    enableSleeping: true,
+                    gravity: { x: 0, y: 0.8 }
+                });
+                this.world = this.engine.world;
+
+                this.fruitTypes = [
+                    { radius: 20, color: "#ff5252", score: 10, density: 0.001 },
+                    { radius: 30, color: "#ffa726", score: 20, density: 0.001 },
+                    { radius: 40, color: "#ffd600", score: 30, density: 0.001 }
+                ];
+
+                this.createWalls();
+
+                this.canvas.addEventListener('mousemove', (e) => this.moveCurrentFruit(e));
+                this.canvas.addEventListener('click', () => this.dropFruit());
+                document.getElementById('restartBtn').addEventListener('click', () => this.restartGame());
+
+                this.nextFruitElement = document.getElementById('nextFruit');
+                this.updateNextFruitDisplay();
+
+                Matter.Engine.run(this.engine);
+                this.createNewFruit();
+                this.update();
+            }
+
+            createWalls() {
+                const wallOptions = { 
+                    isStatic: true, 
+                    render: { 
+                        fillStyle: '#4a4a4a',
+                        visible: true 
+                    },
+                    collisionFilter: { group: -1 }
+                };
+
+                this.bottomWall = Matter.Bodies.rectangle(
+                    this.width / 2, 
+                    this.height - this.wallThickness/2, 
+                    this.width, 
+                    this.wallThickness, 
+                    wallOptions
+                );
+
+                this.leftWall = Matter.Bodies.rectangle(
+                    this.wallThickness/2, 
+                    this.height / 2, 
+                    this.wallThickness, 
+                    this.height, 
+                    wallOptions
+                );
+
+                this.rightWall = Matter.Bodies.rectangle(
+                    this.width - this.wallThickness/2, 
+                    this.height / 2, 
+                    this.wallThickness, 
+                    this.height, 
+                    wallOptions
+                );
+
+                this.topWall = Matter.Bodies.rectangle(
+                    this.width / 2,
+                    -this.wallThickness/2,
+                    this.width,
+                    this.wallThickness,
+                    { 
+                        isStatic: true, 
+                        render: { visible: false },
+                        isSensor: true
+                    }
+                );
+
+                Matter.Composite.add(this.world, [this.bottomWall, this.leftWall, this.rightWall, this.topWall]);
+
+                Matter.Events.on(this.engine, 'collisionStart', (event) => {
+                    if (this.mergeInProgress) return;
+                    
+                    const pairs = event.pairs;
+                    for (let i = 0; i < pairs.length; i++) {
+                        const pair = pairs[i];
+                        this.handleCollision(pair.bodyA, pair.bodyB);
+                    }
+                });
+            }
+
+            createNewFruit() {
+                const type = this.fruitTypes[this.nextFruitType];
+                const minY = this.gameOverLineY + type.radius + 5;
+                
+                this.currentFruit = {
+                    x: this.width / 2,
+                    y: Math.max(minY, this.spawnLineY - type.radius - 5),
+                    radius: type.radius,
+                    color: type.color,
+                    type: this.nextFruitType
+                };
+                
+                this.nextFruitType = 0;
+                this.updateNextFruitDisplay();
+            }
+
+            updateNextFruitDisplay() {
+                const nextType = this.fruitTypes[this.nextFruitType];
+                this.nextFruitElement.style.backgroundColor = nextType.color;
+                this.nextFruitElement.style.width = `${nextType.radius * 2}px`;
+                this.nextFruitElement.style.height = `${nextType.radius * 2}px`;
+            }
+
+            moveCurrentFruit(e) {
+                if (this.gameOver || !this.currentFruit) return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                this.currentFruit.x = e.clientX - rect.left;
+
+                this.currentFruit.x = Math.max(
+                    this.currentFruit.radius + this.wallThickness, 
+                    Math.min(
+                        this.width - this.currentFruit.radius - this.wallThickness, 
+                        this.currentFruit.x
+                    )
+                );
+            }
+
+            dropFruit() {
+                if (this.gameOver || !this.currentFruit) return;
+                
+                const type = this.fruitTypes[this.currentFruit.type];
+                const fruit = Matter.Bodies.circle(
+                    this.currentFruit.x,
+                    this.currentFruit.y + type.radius + 5,
+                    type.radius,
+                    {
+                        restitution: 0.3,
+                        friction: 0.1,
+                        density: type.density,
+                        render: {
+                            fillStyle: type.color,
+                            visible: true
+                        },
+                        fruitData: {
+                            type: this.currentFruit.type,
+                            score: type.score,
+                            merged: false
+                        },
+                        collisionFilter: {
+                            group: -1
+                        }
+                    }
+                );
+
+                setTimeout(() => {
+                    if (fruit && fruit.collisionFilter) {
+                        fruit.collisionFilter.group = 0;
+                    }
+                }, 300);
+                
+                Matter.Composite.add(this.world, fruit);
+                this.createNewFruit();
+            }
+
+            update() {
+                if (this.gameOver) {
+                    this.drawGameOver();
+                    return;
+                }
+
+                this.ctx.clearRect(0, 0, this.width, this.height);
+
+                this.drawWalls();
+
+                this.drawSpawnLine();
+
+                this.drawAllFruits();
+
+                if (this.currentFruit) {
+                    this.drawPreviewFruit();
+                }
+
+                this.drawScore();
+
+                this.checkGameOver();
+                
+                requestAnimationFrame(() => this.update());
+            }
+
+            drawWalls() {
+                //на будущее
+            }
+
+            drawSpawnLine() {
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.wallThickness, this.spawnLineY);
+                this.ctx.lineTo(this.width - this.wallThickness, this.spawnLineY);
+                this.ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+                this.ctx.closePath();
+            }
+
+            drawPreviewFruit() {
+                this.ctx.beginPath();
+                this.ctx.arc(
+                    this.currentFruit.x,
+                    this.currentFruit.y,
+                    this.currentFruit.radius,
+                    0,
+                    Math.PI * 2
+                );
+                this.ctx.fillStyle = this.currentFruit.color;
+                this.ctx.globalAlpha = 0.7;
+                this.ctx.fill();
+                this.ctx.globalAlpha = 1.0;
+                this.ctx.closePath();
+            }
+
+            drawAllFruits() {
+                const bodies = Matter.Composite.allBodies(this.world);
+                
+                for (const body of bodies) {
+                    if (body.fruitData) {
+                        this.drawFruit(body);
+                    }
+                }
+            }
+
+            drawFruit(body) {
+                this.ctx.beginPath();
+                this.ctx.arc(
+                    body.position.x,
+                    body.position.y,
+                    body.circleRadius,
+                    0,
+                    Math.PI * 2
+                );
+                this.ctx.fillStyle = body.render.fillStyle;
+                this.ctx.fill();
+                
+                if (body.fruitData.merged) {
+                    this.ctx.strokeStyle = "white";
+                    this.ctx.lineWidth = 4;
+                    this.ctx.stroke();
+                    body.fruitData.merged = false;
+                }
+                
+                this.ctx.closePath();
+            }
+
+            drawScore() {
+                this.ctx.fillStyle = "black";
+                this.ctx.font = "20px Arial";
+                this.ctx.fillText(`Очки: ${this.score}`, 20, 30);
+                this.ctx.fillText(`Топ очков: ${this.highScore}`, 20, 60);
+            }
+
+            drawGameOver() {
+                this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                
+                this.ctx.fillStyle = "red";
+                this.ctx.font = "40px Arial";
+                this.ctx.textAlign = "center";
+                this.ctx.fillText("ГГ", this.width / 2, this.height / 2 - 30);
+                
+                this.ctx.fillStyle = "white";
+                this.ctx.font = "24px Arial";
+                this.ctx.fillText(`Ваши очки: ${this.score}`, this.width / 2, this.height / 2 + 20);
+                this.ctx.fillText(`Топ очков: ${this.highScore}`, this.width / 2, this.height / 2 + 50);
+                
+                this.ctx.textAlign = "left";
+            }
+
+            handleCollision(bodyA, bodyB) {
+                if (bodyA === this.bottomWall || bodyA === this.leftWall || bodyA === this.rightWall || bodyA === this.topWall ||
+                    bodyB === this.bottomWall || bodyB === this.leftWall || bodyB === this.rightWall || bodyB === this.topWall) {
+                    return;
+                }
+                
+                if (bodyA.fruitData && bodyB.fruitData && 
+                    bodyA.fruitData.type === bodyB.fruitData.type &&
+                    !bodyA.fruitData.merged && !bodyB.fruitData.merged) {
+                    
+                    const nextTypeIndex = bodyA.fruitData.type + 1;
+                    if (nextTypeIndex < this.fruitTypes.length) {
+                        this.mergeInProgress = true;
+                        bodyA.fruitData.merged = true;
+                        bodyB.fruitData.merged = true;
+                        
+                        setTimeout(() => {
+                            this.mergeFruits(bodyA, bodyB, nextTypeIndex);
+                            this.mergeInProgress = false;
+                        }, 100);
+                    }
+                }
+            }
+
+            mergeFruits(bodyA, bodyB, nextTypeIndex) {
+                if (!bodyA || !bodyB) return;
+
+                Matter.Composite.remove(this.world, [bodyA, bodyB]);
+
+                const newType = this.fruitTypes[nextTypeIndex];
+                const avgX = (bodyA.position.x + bodyB.position.x) / 2;
+                const avgY = (bodyA.position.y + bodyB.position.y) / 2;
+                
+                const newFruit = Matter.Bodies.circle(
+                    avgX,
+                    avgY,
+                    newType.radius,
+                    {
+                        restitution: 0.3,
+                        friction: 0.1,
+                        density: newType.density,
+                        render: {
+                            fillStyle: newType.color,
+                            visible: true
+                        },
+                        fruitData: {
+                            type: nextTypeIndex,
+                            score: newType.score,
+                            merged: false
+                        }
+                    }
+                );
+                
+                Matter.Composite.add(this.world, newFruit);
+                this.score += newType.score;
+                this.updateHighScore();
+            }
+
+            checkGameOver() {
+                const bodies = Matter.Composite.allBodies(this.world);
+                for (const body of bodies) {
+                    if (body.fruitData) {
+                        const topPoint = body.position.y - body.circleRadius;
+                        if (topPoint < this.gameOverLineY) {
+                            this.gameOver = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+
+            restartGame() {
+                const bodies = Matter.Composite.allBodies(this.world);
+                const fruits = bodies.filter(body => body.fruitData);
+                Matter.Composite.remove(this.world, fruits);
+
+                this.score = 0;
+                this.gameOver = false;
+                this.mergeInProgress = false;
+                this.nextFruitType = 0;
+                this.updateHighScore();
+                this.createNewFruit();
+
+                this.update();
+            }
+
+            updateHighScore() {
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    localStorage.setItem("highScore", this.highScore);
+                }
+            }
+
+            loadHighScore() {
+                return localStorage.getItem("highScore") ? parseInt(localStorage.getItem("highScore")) : 0;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            new SuikaGame("gameCanvas");
+        });
+    </script>
+</body>
+</html>
