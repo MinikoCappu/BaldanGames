@@ -1,34 +1,186 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Suika Game</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suika Game - Фруктовая физика</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; background-color: #f0f8ff; }
-        #nextFruit {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 60px;
-            height: 60px;
-            border: 2px solid black;
-            border-radius: 50%;
-            background-color: white;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
         }
-        #restartBtn {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            padding: 10px 20px;
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow: auto;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+            background-color: #f0f8ff;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+        
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background-color: #4a6fa5;
+            color: white;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .score-display {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .next-fruit {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .next-fruit-label {
+            font-size: 14px;
+        }
+        
+        .next-fruit-preview {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
             font-size: 16px;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #4a6fa5 0%, #3a5a8a 100%);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            flex: 1;
+            max-width: 180px;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .btn:active {
+            transform: translateY(1px);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .game-over h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #ff5252;
+        }
+        
+        .game-over p {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        
+        .fruit-name {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+        
+        @media (max-width: 500px) {
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: none;
+            }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
 </head>
 <body>
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
-    <div id="nextFruit"></div>
-    <button id="restartBtn">Restart Game</button>
+    <div class="game-container">
+        <div class="info-panel">
+            <div class="score-display">
+                <div>Очки: <span id="currentScore">0</span></div>
+                <div>Рекорд: <span id="highScore">0</span></div>
+            </div>
+            <div class="next-fruit">
+                <div class="next-fruit-label">Следующий:</div>
+                <div class="next-fruit-preview" id="nextFruit"></div>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button class="btn" id="restartBtn">Новая игра</button>
+    </div>
 
     <script>
         class SuikaGame {
@@ -42,37 +194,63 @@
                 this.gameOver = false;
                 this.mergeInProgress = false;
                 this.currentFruit = null;
-                this.nextFruitType = 0;
+                this.nextFruitType = this.getRandomFruitType();
                 this.spawnLineY = 80;
                 this.gameOverLineY = 50;
                 this.wallThickness = 20;
-
+                this.fruitQueue = [];
+                this.previewQueueSize = 3;
+                
                 this.engine = Matter.Engine.create({
                     enableSleeping: true,
                     gravity: { x: 0, y: 0.8 }
                 });
                 this.world = this.engine.world;
-
+                
                 this.fruitTypes = [
-                    { radius: 20, color: "#ff5252", score: 10, density: 0.001 },
-                    { radius: 30, color: "#ffa726", score: 20, density: 0.001 },
-                    { radius: 40, color: "#ffd600", score: 30, density: 0.001 }
+                    { name: "Виноград", radius: 15, color: "#9c27b0", score: 1, density: 0.001 },
+                    { name: "Вишня", radius: 20, color: "#e91e63", score: 3, density: 0.001 },
+                    { name: "Клубника", radius: 25, color: "#f44336", score: 6, density: 0.001 },
+                    { name: "Мандарин", radius: 30, color: "#ff9800", score: 10, density: 0.001 },
+                    { name: "Яблоко", radius: 35, color: "#ff5722", score: 15, density: 0.001 },
+                    { name: "Груша", radius: 40, color: "#ffeb3b", score: 21, density: 0.001 },
+                    { name: "Персик", radius: 45, color: "#ffccbc", score: 28, density: 0.001 },
+                    { name: "Ананас", radius: 50, color: "#ffc107", score: 36, density: 0.001 },
+                    { name: "Дыня", radius: 55, color: "#8bc34a", score: 45, density: 0.001 },
+                    { name: "Арбуз", radius: 60, color: "#4caf50", score: 55, density: 0.001 }
                 ];
-
+                
+                this.initializeFruitQueue();
                 this.createWalls();
-
-                this.canvas.addEventListener('mousemove', (e) => this.moveCurrentFruit(e));
-                this.canvas.addEventListener('click', () => this.dropFruit());
-                document.getElementById('restartBtn').addEventListener('click', () => this.restartGame());
-
-                this.nextFruitElement = document.getElementById('nextFruit');
-                this.updateNextFruitDisplay();
-
+                this.setupEvents();
                 Matter.Engine.run(this.engine);
                 this.createNewFruit();
                 this.update();
             }
 
+            initializeFruitQueue() {
+                this.fruitQueue = [];
+                for (let i = 0; i < this.previewQueueSize; i++) {
+                    this.fruitQueue.push(this.getRandomFruitType());
+                }
+                this.updateNextFruitDisplay();
+            }
+
+            getRandomFruitType() {
+                const probabilities = [0.4, 0.3, 0.15, 0.1, 0.05];
+                const rand = Math.random();
+
+                let cumulativeProbability = 0;
+                for (let i = 0; i < probabilities.length; i++) {
+                    cumulativeProbability += probabilities[i];
+                    if (rand < cumulativeProbability) {
+                        return i;
+                    }
+                }
+
+                return 0;
+            }
+            
             createWalls() {
                 const wallOptions = { 
                     isStatic: true, 
@@ -131,35 +309,74 @@
                     }
                 });
             }
+            
+            setupEvents() {
+                this.canvas.addEventListener('mousemove', (e) => this.moveCurrentFruit(e));
+                this.canvas.addEventListener('click', () => this.dropFruit());
 
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    this.moveCurrentFruit(e.touches[0]);
+                }, { passive: false });
+                
+                this.canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.dropFruit();
+                });
+
+                document.getElementById('restartBtn').addEventListener('click', () => this.restartGame());
+            }
+            
             createNewFruit() {
-                const type = this.fruitTypes[this.nextFruitType];
+                if (this.fruitQueue.length === 0) {
+                    this.initializeFruitQueue();
+                }
+                
+                const typeIndex = this.fruitQueue.shift();
+                const type = this.fruitTypes[typeIndex];
                 const minY = this.gameOverLineY + type.radius + 5;
+
+                this.fruitQueue.push(this.getRandomFruitType());
+                this.updateNextFruitDisplay();
                 
                 this.currentFruit = {
                     x: this.width / 2,
                     y: Math.max(minY, this.spawnLineY - type.radius - 5),
                     radius: type.radius,
                     color: type.color,
-                    type: this.nextFruitType
+                    type: typeIndex,
+                    name: type.name
                 };
-                
-                this.nextFruitType = 0;
-                this.updateNextFruitDisplay();
             }
-
+            
             updateNextFruitDisplay() {
-                const nextType = this.fruitTypes[this.nextFruitType];
-                this.nextFruitElement.style.backgroundColor = nextType.color;
-                this.nextFruitElement.style.width = `${nextType.radius * 2}px`;
-                this.nextFruitElement.style.height = `${nextType.radius * 2}px`;
-            }
+                const nextFruitElement = document.getElementById('nextFruit');
+                const nextType = this.fruitTypes[this.fruitQueue[0]];
+                
+                nextFruitElement.style.backgroundColor = nextType.color;
+                nextFruitElement.style.width = `${Math.min(40, nextType.radius * 2)}px`;
+                nextFruitElement.style.height = `${Math.min(40, nextType.radius * 2)}px`;
+                nextFruitElement.textContent = nextType.name.charAt(0);
 
+                document.getElementById('currentScore').textContent = this.score;
+                document.getElementById('highScore').textContent = this.highScore;
+            }
+            
             moveCurrentFruit(e) {
                 if (this.gameOver || !this.currentFruit) return;
                 
                 const rect = this.canvas.getBoundingClientRect();
-                this.currentFruit.x = e.clientX - rect.left;
+                let xPos;
+                
+                if (e.clientX !== undefined) {
+                    xPos = e.clientX - rect.left;
+                } else if (e.pageX !== undefined) {
+                    xPos = e.pageX - rect.left;
+                } else {
+                    return;
+                }
+                
+                this.currentFruit.x = xPos;
 
                 this.currentFruit.x = Math.max(
                     this.currentFruit.radius + this.wallThickness, 
@@ -169,7 +386,7 @@
                     )
                 );
             }
-
+            
             dropFruit() {
                 if (this.gameOver || !this.currentFruit) return;
                 
@@ -189,7 +406,8 @@
                         fruitData: {
                             type: this.currentFruit.type,
                             score: type.score,
-                            merged: false
+                            merged: false,
+                            name: type.name
                         },
                         collisionFilter: {
                             group: -1
@@ -206,7 +424,7 @@
                 Matter.Composite.add(this.world, fruit);
                 this.createNewFruit();
             }
-
+            
             update() {
                 if (this.gameOver) {
                     this.drawGameOver();
@@ -214,28 +432,17 @@
                 }
 
                 this.ctx.clearRect(0, 0, this.width, this.height);
-
-                this.drawWalls();
-
                 this.drawSpawnLine();
-
                 this.drawAllFruits();
-
+                
                 if (this.currentFruit) {
                     this.drawPreviewFruit();
                 }
-
-                this.drawScore();
-
-                this.checkGameOver();
                 
+                this.checkGameOver();
                 requestAnimationFrame(() => this.update());
             }
-
-            drawWalls() {
-                //на будущее
-            }
-
+            
             drawSpawnLine() {
                 this.ctx.beginPath();
                 this.ctx.moveTo(this.wallThickness, this.spawnLineY);
@@ -247,7 +454,7 @@
                 this.ctx.setLineDash([]);
                 this.ctx.closePath();
             }
-
+            
             drawPreviewFruit() {
                 this.ctx.beginPath();
                 this.ctx.arc(
@@ -261,9 +468,15 @@
                 this.ctx.globalAlpha = 0.7;
                 this.ctx.fill();
                 this.ctx.globalAlpha = 1.0;
+
+                this.ctx.fillStyle = "white";
+                this.ctx.font = "bold 10px Arial";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText(this.currentFruit.name.charAt(0), this.currentFruit.x, this.currentFruit.y);
                 this.ctx.closePath();
             }
-
+            
             drawAllFruits() {
                 const bodies = Matter.Composite.allBodies(this.world);
                 
@@ -273,7 +486,7 @@
                     }
                 }
             }
-
+            
             drawFruit(body) {
                 this.ctx.beginPath();
                 this.ctx.arc(
@@ -285,41 +498,41 @@
                 );
                 this.ctx.fillStyle = body.render.fillStyle;
                 this.ctx.fill();
-                
+
                 if (body.fruitData.merged) {
                     this.ctx.strokeStyle = "white";
                     this.ctx.lineWidth = 4;
                     this.ctx.stroke();
                     body.fruitData.merged = false;
                 }
-                
+
+                this.ctx.fillStyle = "white";
+                this.ctx.font = "bold " + Math.max(10, body.circleRadius / 2) + "px Arial";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText(body.fruitData.name.charAt(0), body.position.x, body.position.y);
                 this.ctx.closePath();
             }
-
-            drawScore() {
-                this.ctx.fillStyle = "black";
-                this.ctx.font = "20px Arial";
-                this.ctx.fillText(`Очки: ${this.score}`, 20, 30);
-                this.ctx.fillText(`Топ очков: ${this.highScore}`, 20, 60);
-            }
-
+            
             drawGameOver() {
-                this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
                 this.ctx.fillRect(0, 0, this.width, this.height);
                 
-                this.ctx.fillStyle = "red";
-                this.ctx.font = "40px Arial";
+                this.ctx.fillStyle = "#ff5252";
+                this.ctx.font = "36px Arial Rounded MT Bold";
                 this.ctx.textAlign = "center";
-                this.ctx.fillText("ГГ", this.width / 2, this.height / 2 - 30);
+                this.ctx.fillText("Игра Окончена", this.width / 2, this.height / 2 - 60);
                 
                 this.ctx.fillStyle = "white";
                 this.ctx.font = "24px Arial";
-                this.ctx.fillText(`Ваши очки: ${this.score}`, this.width / 2, this.height / 2 + 20);
-                this.ctx.fillText(`Топ очков: ${this.highScore}`, this.width / 2, this.height / 2 + 50);
+                this.ctx.fillText(`Ваши очки: ${this.score}`, this.width / 2, this.height / 2);
+                this.ctx.fillText(`Рекорд: ${this.highScore}`, this.width / 2, this.height / 2 + 40);
                 
+                this.ctx.font = "18px Arial";
+                this.ctx.fillText("Нажмите 'Новая игра'", this.width / 2, this.height / 2 + 80);
                 this.ctx.textAlign = "left";
             }
-
+            
             handleCollision(bodyA, bodyB) {
                 if (bodyA === this.bottomWall || bodyA === this.leftWall || bodyA === this.rightWall || bodyA === this.topWall ||
                     bodyB === this.bottomWall || bodyB === this.leftWall || bodyB === this.rightWall || bodyB === this.topWall) {
@@ -343,7 +556,7 @@
                     }
                 }
             }
-
+            
             mergeFruits(bodyA, bodyB, nextTypeIndex) {
                 if (!bodyA || !bodyB) return;
 
@@ -368,7 +581,8 @@
                         fruitData: {
                             type: nextTypeIndex,
                             score: newType.score,
-                            merged: false
+                            merged: false,
+                            name: newType.name
                         }
                     }
                 );
@@ -376,8 +590,51 @@
                 Matter.Composite.add(this.world, newFruit);
                 this.score += newType.score;
                 this.updateHighScore();
-            }
+                this.updateNextFruitDisplay();
 
+                this.createMergeEffect(avgX, avgY, newType.color);
+            }
+            
+            createMergeEffect(x, y, color) {
+                const particles = 10;
+                for (let i = 0; i < particles; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 2 + Math.random() * 3;
+                    const size = 3 + Math.random() * 5;
+                    
+                    const particle = Matter.Bodies.circle(
+                        x,
+                        y,
+                        size,
+                        {
+                            restitution: 0.8,
+                            friction: 0.1,
+                            density: 0.0005,
+                            render: {
+                                fillStyle: color,
+                                visible: true
+                            },
+                            collisionFilter: {
+                                group: -1
+                            },
+                            timeToLive: 30 + Math.random() * 20
+                        }
+                    );
+                    
+                    Matter.Body.setVelocity(particle, {
+                        x: Math.cos(angle) * speed,
+                        y: Math.sin(angle) * speed
+                    });
+                    
+                    Matter.Composite.add(this.world, particle);
+                    setTimeout(() => {
+                        if (Matter.Composite.get(this.world, particle.id)) {
+                            Matter.Composite.remove(this.world, particle);
+                        }
+                    }, particle.timeToLive * 50);
+                }
+            }
+            
             checkGameOver() {
                 const bodies = Matter.Composite.allBodies(this.world);
                 for (const body of bodies) {
@@ -390,8 +647,52 @@
                     }
                 }
             }
+            
+            showHint() {
+                if (this.gameOver) return;
+                const bodies = Matter.Composite.allBodies(this.world).filter(b => b.fruitData);
+                const hint = document.createElement('div');
+                hint.style.position = 'absolute';
+                hint.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                hint.style.padding = '10px';
+                hint.style.borderRadius = '10px';
+                hint.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+                hint.style.zIndex = '100';
+                hint.style.maxWidth = '200px';
+                hint.style.textAlign = 'center';
+                
+                if (bodies.length === 0) {
+                    hint.textContent = 'Бросайте фрукты в центр, чтобы начать!';
+                } else {
+                    const fruitCounts = {};
+                    bodies.forEach(b => {
+                        fruitCounts[b.fruitData.type] = (fruitCounts[b.fruitData.type] || 0) + 1;
+                    });
+                    let hintText = 'Советы:\n';
+                    for (const type in fruitCounts) {
+                        if (fruitCounts[type] >= 2) {
+                            hintText += `- Объедините ${this.fruitTypes[type].name} (${fruitCounts[type]} шт)\n`;
+                        }
+                    }
+                    
+                    if (Object.keys(fruitCounts).length === 0) {
+                        hintText = 'Продолжайте бросать фрукты!';
+                    }
+                    
+                    hint.textContent = hintText;
+                }
 
+                const canvasRect = this.canvas.getBoundingClientRect();
+                hint.style.top = (canvasRect.top + 100) + 'px';
+                hint.style.left = (canvasRect.left + 20) + 'px';
+                
+                document.body.appendChild(hint);
 
+                setTimeout(() => {
+                    document.body.removeChild(hint);
+                }, 3000);
+            }
+            
             restartGame() {
                 const bodies = Matter.Composite.allBodies(this.world);
                 const fruits = bodies.filter(body => body.fruitData);
@@ -400,27 +701,39 @@
                 this.score = 0;
                 this.gameOver = false;
                 this.mergeInProgress = false;
-                this.nextFruitType = 0;
-                this.updateHighScore();
+                this.initializeFruitQueue();
                 this.createNewFruit();
 
+                this.updateNextFruitDisplay();
                 this.update();
             }
-
+            
             updateHighScore() {
                 if (this.score > this.highScore) {
                     this.highScore = this.score;
-                    localStorage.setItem("highScore", this.highScore);
+                    localStorage.setItem("suikaHighScore", this.highScore);
+                    document.getElementById('highScore').textContent = this.highScore;
                 }
             }
-
+            
             loadHighScore() {
-                return localStorage.getItem("highScore") ? parseInt(localStorage.getItem("highScore")) : 0;
+                const savedScore = localStorage.getItem("suikaHighScore");
+                return savedScore ? parseInt(savedScore) : 0;
             }
         }
-
         document.addEventListener("DOMContentLoaded", () => {
-            new SuikaGame("gameCanvas");
+            const game = new SuikaGame("gameCanvas");
+            function resizeCanvas() {
+                const canvas = document.getElementById('gameCanvas');
+                const container = document.querySelector('.game-container');
+                const aspectRatio = canvas.width / canvas.height;
+                const containerWidth = container.clientWidth;
+                canvas.style.width = containerWidth + 'px';
+                canvas.style.height = (containerWidth / aspectRatio) + 'px';
+            }
+            
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
         });
     </script>
 </body>
