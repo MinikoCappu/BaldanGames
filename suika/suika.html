@@ -180,6 +180,7 @@
     
     <div class="controls">
         <button class="btn" id="restartBtn">Новая игра</button>
+        <button class="btn" id="SkinBtn">Сменить скин</button>
     </div>
 
     <script>
@@ -200,6 +201,9 @@
                 this.wallThickness = 20;
                 this.fruitQueue = [];
                 this.previewQueueSize = 3;
+                this.useImages = false;
+                this.imageCache = {};
+
                 
                 this.engine = Matter.Engine.create({
                     enableSleeping: true,
@@ -208,17 +212,24 @@
                 this.world = this.engine.world;
                 
                 this.fruitTypes = [
-                    { name: "Виноград", radius: 15, color: "#9c27b0", score: 1, density: 0.001 },
-                    { name: "Вишня", radius: 20, color: "#e91e63", score: 3, density: 0.001 },
-                    { name: "Клубника", radius: 25, color: "#f44336", score: 6, density: 0.001 },
-                    { name: "Мандарин", radius: 30, color: "#ff9800", score: 10, density: 0.001 },
-                    { name: "Яблоко", radius: 35, color: "#ff5722", score: 15, density: 0.001 },
-                    { name: "Груша", radius: 40, color: "#ffeb3b", score: 21, density: 0.001 },
-                    { name: "Персик", radius: 45, color: "#ffccbc", score: 28, density: 0.001 },
-                    { name: "Ананас", radius: 50, color: "#ffc107", score: 36, density: 0.001 },
-                    { name: "Дыня", radius: 55, color: "#8bc34a", score: 45, density: 0.001 },
-                    { name: "Арбуз", radius: 60, color: "#4caf50", score: 55, density: 0.001 }
+                    { name: "Виноград", radius: 20, color: "#9c27b0", score: 1, density: 0.001, image: "images/виноград.png"},
+                    { name: "Вишня", radius: 30, color: "#e91e63", score: 3, density: 0.001, image: "images/вишня.png"},
+                    { name: "Клубника", radius: 40, color: "#f44336", score: 7, density: 0.001, image: "images/клубника.png"},
+                    { name: "Мандарин", radius: 50, color: "#ff9800", score: 12, density: 0.001, image: "images/мандарин.png"},
+                    { name: "Яблоко", radius: 60, color: "#ff5722", score: 20, density: 0.001, image: "images/яблоко.png"},
+                    { name: "Персик", radius: 70, color: "#ffccbc", score: 35, density: 0.001, image: "images/персик.png"},
+                    { name: "Ананас", radius: 80, color: "#ffc107", score: 55, density: 0.001, image: "images/ананас.png"},
+                    { name: "Арбуз", radius: 90, color: "#4caf50", score: 80, density: 0.001, image: "images/арбуз.png"}
                 ];
+
+                this.fruitTypes.forEach((fruit, index) => {
+                    if (fruit.image) {
+                        const img = new Image();
+                        img.src = fruit.image;
+                        this.imageCache[index] = img;
+                    }
+                });
+
                 
                 this.initializeFruitQueue();
                 this.createWalls();
@@ -325,6 +336,9 @@
                 });
 
                 document.getElementById('restartBtn').addEventListener('click', () => this.restartGame());
+                document.getElementById('SkinBtn').addEventListener('click', () => {
+                    this.useImages = !this.useImages;
+                });
             }
             
             createNewFruit() {
@@ -351,16 +365,34 @@
             
             updateNextFruitDisplay() {
                 const nextFruitElement = document.getElementById('nextFruit');
-                const nextType = this.fruitTypes[this.fruitQueue[0]];
-                
-                nextFruitElement.style.backgroundColor = nextType.color;
-                nextFruitElement.style.width = `${Math.min(40, nextType.radius * 2)}px`;
-                nextFruitElement.style.height = `${Math.min(40, nextType.radius * 2)}px`;
-                nextFruitElement.textContent = nextType.name.charAt(0);
+                const nextTypeIndex = this.fruitQueue[0];
+                const nextType = this.fruitTypes[nextTypeIndex];
+                const size = Math.min(40, nextType.radius * 2);
+                nextFruitElement.style.width = `${size}px`;
+                nextFruitElement.style.height = `${size}px`;
+                nextFruitElement.innerHTML = '';
+
+                if (this.useImages && this.imageCache[nextTypeIndex]) {
+                    const img = this.imageCache[nextTypeIndex];
+                    nextFruitElement.style.backgroundColor = 'transparent';
+
+                    const imageElement = document.createElement('img');
+                    imageElement.src = img.src;
+                    imageElement.style.width = '100%';
+                    imageElement.style.height = '100%';
+                    imageElement.style.borderRadius = '50%';
+                    imageElement.style.objectFit = 'cover';
+
+                    nextFruitElement.appendChild(imageElement);
+                } else {
+                    nextFruitElement.style.backgroundColor = nextType.color;
+                    nextFruitElement.textContent = nextType.name.charAt(0);
+                }
 
                 document.getElementById('currentScore').textContent = this.score;
                 document.getElementById('highScore').textContent = this.highScore;
             }
+
             
             moveCurrentFruit(e) {
                 if (this.gameOver || !this.currentFruit) return;
@@ -456,25 +488,31 @@
             }
             
             drawPreviewFruit() {
-                this.ctx.beginPath();
-                this.ctx.arc(
-                    this.currentFruit.x,
-                    this.currentFruit.y,
-                    this.currentFruit.radius,
-                    0,
-                    Math.PI * 2
-                );
-                this.ctx.fillStyle = this.currentFruit.color;
-                this.ctx.globalAlpha = 0.7;
-                this.ctx.fill();
-                this.ctx.globalAlpha = 1.0;
+                const type = this.fruitTypes[this.currentFruit.type];
+                const x = this.currentFruit.x;
+                const y = this.currentFruit.y;
+                const radius = this.currentFruit.radius;
 
-                this.ctx.fillStyle = "white";
-                this.ctx.font = "bold 10px Arial";
-                this.ctx.textAlign = "center";
-                this.ctx.textBaseline = "middle";
-                this.ctx.fillText(this.currentFruit.name.charAt(0), this.currentFruit.x, this.currentFruit.y);
-                this.ctx.closePath();
+                if (this.useImages && this.imageCache[this.currentFruit.type]) {
+                    const img = this.imageCache[this.currentFruit.type];
+                    this.ctx.globalAlpha = 0.7;
+                    this.ctx.drawImage(img, x - radius, y - radius, radius * 2, radius * 2);
+                    this.ctx.globalAlpha = 1.0;
+                } else {
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+                    this.ctx.fillStyle = type.color;
+                    this.ctx.globalAlpha = 0.7;
+                    this.ctx.fill();
+                    this.ctx.globalAlpha = 1.0;
+
+                    this.ctx.fillStyle = "white";
+                    this.ctx.font = "bold 10px Arial";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "middle";
+                    this.ctx.fillText(type.name.charAt(0), x, y);
+                    this.ctx.closePath();
+                }
             }
             
             drawAllFruits() {
@@ -488,30 +526,34 @@
             }
             
             drawFruit(body) {
-                this.ctx.beginPath();
-                this.ctx.arc(
-                    body.position.x,
-                    body.position.y,
-                    body.circleRadius,
-                    0,
-                    Math.PI * 2
-                );
-                this.ctx.fillStyle = body.render.fillStyle;
-                this.ctx.fill();
+                const typeIndex = body.fruitData.type;
+                const radius = body.circleRadius;
+                const x = body.position.x;
+                const y = body.position.y;
 
-                if (body.fruitData.merged) {
-                    this.ctx.strokeStyle = "white";
-                    this.ctx.lineWidth = 4;
-                    this.ctx.stroke();
-                    body.fruitData.merged = false;
+                if (this.useImages && this.imageCache[typeIndex]) {
+                    const img = this.imageCache[typeIndex];
+                    this.ctx.drawImage(img, x - radius, y - radius, radius * 2, radius * 2);
+                } else {
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+                    this.ctx.fillStyle = body.render.fillStyle;
+                    this.ctx.fill();
+
+                    if (body.fruitData.merged) {
+                        this.ctx.strokeStyle = "white";
+                        this.ctx.lineWidth = 4;
+                        this.ctx.stroke();
+                        body.fruitData.merged = false;
+                    }
+
+                    this.ctx.fillStyle = "white";
+                    this.ctx.font = "bold " + Math.max(10, radius / 2) + "px Arial";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "middle";
+                    this.ctx.fillText(body.fruitData.name.charAt(0), x, y);
+                    this.ctx.closePath();
                 }
-
-                this.ctx.fillStyle = "white";
-                this.ctx.font = "bold " + Math.max(10, body.circleRadius / 2) + "px Arial";
-                this.ctx.textAlign = "center";
-                this.ctx.textBaseline = "middle";
-                this.ctx.fillText(body.fruitData.name.charAt(0), body.position.x, body.position.y);
-                this.ctx.closePath();
             }
             
             drawGameOver() {
