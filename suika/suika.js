@@ -79,8 +79,8 @@ class SuikaGame {
     createWalls() {
         const wallOptions = { 
             isStatic: true, 
-            friction: 1,
-            frictionStatic: 1,
+            friction: 0.6,
+            frictionStatic: 0.6,
             render: { 
                 fillStyle: '#4a4a4a',
                 visible: true 
@@ -437,8 +437,8 @@ class SuikaGame {
             newType.radius,
             {
                 restitution: 0.3,
-                friction: 0.8,
-                frictionStatic: 0.5,
+                friction: 0.4,
+                frictionStatic: 0.4,
                 density: newType.density,
                 render: {
                     fillStyle: newType.color,
